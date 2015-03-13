@@ -1,0 +1,3 @@
+TreeTagger est l'étiqueteur morphosyntaxique utilisé pour étiqueter le texte fourni en entrée de Densidées. Une version en ligne est utilisable [sur le site de l'UCL](http://cental.fltr.ucl.ac.be/treetagger/).
+
+Il est téléchargeable [sur ce site](http://www.ims.uni-stuttgart.de/projekte/corplex/TreeTagger/). Des instructions pour installer la version française sous Windows sont données [au bas de cette page](http://tal-p3.wordpress.com/2009/03/23/bao2-treetagger-limite-a-1000-mots/).

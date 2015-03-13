@@ -1,0 +1,1 @@
+Le manuel d'utilisation de Densidées est disponible [sur la page de téléchargements](http://code.google.com/p/densidees/downloads/list).
