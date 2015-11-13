@@ -1,0 +1,18 @@
+201 DET:ART      W   les
+002 NOM          W   auteurs
+200 PRP          W P de
+002 NOM          W   densidées
+002 PRO:PER      W   vous
+200 VER:pres     W P remercient
+200 PRP          W P pour
+200 DET:POS      W P votre
+002 NOM          W   soutien
+000 SENT             .
+
+9 mots.
+4 propositions.
+Densité des idées : 4.444
+1 fois la règle 000
+4 fois la règle 002
+4 fois la règle 200
+1 fois la règle 201
