@@ -27,7 +27,7 @@
 #######################################################################
 
 
-import sys, os, re, string, time
+import os, re
 from math import *
 
 # ------------------------------
@@ -71,18 +71,15 @@ tagger = args["tag"]
 # -> a dict containing all distinct words of the text with associated nb of occurrences
 # * filename: string
 # * sepchar: string, used to separate cooccurrence windows, will not be added to wordlist
-def open_text(filename, tagger):
-    fd = open(filename, "r")
-    lines = fd.readlines()
+def open_text(text_filename, tagger):
+    text_file = open(text_filename, "r")
     text = []
-    i = 0
 
     # ------------------------------
     # go through the text to extract the words, store them in dict "wordlist" with frequencies
     # and in table "text" in the order they appear
     # ------------------------------
-    for line in lines:
-        i += 1
+    for i, line in enumerate(text_file):
         if tagger == "treetagger":
             res = re.search("^([^	]+)	([^	]+)	([^	\n]+)[\n]*", line)
             if res:
@@ -108,7 +105,7 @@ def open_text(filename, tagger):
                 text.append(item)
             else:
                 print("Ligne", i, "non traitée :", line)
-    fd.close()
+    text_file.close()
     return text
 
 
@@ -117,40 +114,22 @@ def open_text(filename, tagger):
 # ------------------------------
 
 def is_treetagger_prop_tag(tag):
-    result = False
-    if tag == "KON" or tag == "NUM":
-        result = True
-    if re.search("^DET.*", tag):
-        result = True
-    if re.search("^PRP.*", tag):
-        result = True
-    if tag == "ADJ" or tag == "ADV":
-        # enlevé par rapport à CPIDR : tag=="PRO:POS" or tag=="PRO:IND"
-        result = True
-    if re.search("^VER.*", tag):
-        result = True
+    # ADJ and ADV enlevé par rapport à CPIDR : tag=="PRO:POS" or tag=="PRO:IND"
+    if tag in {"KON", "NUM", "ADJ", "ADV"}:
+        return True
+    if re.search("^(DET|PRP|VER).*", tag):
+        return True
     # if tag=="PRO:REL":
     #        result=True
-    return result
+    return False
 
 
 def is_cordial_prop_tag(tag):
-    result = False
-    if tag[0] == "C" or tag[0] == "M":
-        result = True
-    if tag[0] == "D":
-        result = True
-    if tag[0] == "S":
-        result = True
-    if tag[0] == "A":
-        result = True
-    if tag[0] == "R":
-        result = True
-    if tag[0] == "V":
-        result = True
+    if tag[0] in {"C", "M", "D", "S", "A", "R", "V"}:
+        return True
     if tag[0] == "P" and tag[1] != "p":
-        result = True
-    return result
+        return True
+    return False
 
 
 def is_link(lemma):
