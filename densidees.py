@@ -27,9 +27,15 @@
 #######################################################################
 
 
+import logging
 import os
 import re
 from sys import argv
+
+# Configure logging; use level=logging.DEBUG for debugging
+log_msg_format = "%(message)s"
+logging.basicConfig(format=log_msg_format)
+
 
 # Variables
 AUXILIARIES = {"être", "suivre|être", "avoir"}
@@ -104,10 +110,8 @@ def is_link(lemma):
 
 
 def process_treetagged_file(treetagged_filename, ovt_flags):
-    is_oral, debug_mode, tagger = ovt_flags
-    # TODO replace "visible" / "debug_mode" with logging/debug statements
-    if debug_mode == 1:
-        print("Chargement du fichier texte...")
+    is_oral, _, tagger = ovt_flags
+    logging.info("Chargement du fichier texte...")
 
     # Open a file for output. Extend the original filename with ".di.txt"
     output = open(treetagged_filename + ".di.txt", "w")
@@ -857,26 +861,25 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
 
         output.writelines(
             item["rule"] + " " + tag + " " + item["is_word"] + " " + item["is_prop"] + " " + item["word"] + "\n")
-        if debug_mode == 1:
-            print(item["rule"], tag, item["is_word"], item["is_prop"], item["word"])
+        logging.info(" ".join((item["rule"], tag, item["is_word"], item["is_prop"], item["word"])))
         i += 1
 
+    idea_density = 10 * round((num_props + 0.00000001) / (num_words + 0.00000001), 4)
     # Display final information
     output.writelines("\n" + str(num_words) + " mots.\n")
     output.writelines(str(num_props) + " propositions.\n")
     output.writelines(
-        "Densité des idées : " + str(10 * round((num_props + 0.00000001) / (num_words + 0.00000001), 4)) + "\n")
-    if debug_mode == 1:
-        print(num_words, "mots.")
-        print(num_props, "propositions.")
-        print("Densite des idees :", round(10 * (num_props + 0.00000001) / (num_words + 0.00000001), 4))
-    else:
-        print(treetagged_filename + ";" + str(num_words) + ";" + str(num_props))
+        "Densité des idées : " + str(idea_density) + "\n")
+
+    logging.info("{} mots.".format(num_words))
+    logging.info("{} propositions.".format(num_props))
+    logging.info("Densite des idees: {}".format(idea_density))
+
+    print(treetagged_filename + ";" + str(num_words) + ";" + str(num_props))
     num_regles = sorted(bilan_regles.keys())
     for item in num_regles:
         output.writelines(str(bilan_regles[item]) + " fois la règle " + item + "\n")
-        if debug_mode == 1:
-            print(str(bilan_regles[item]) + " fois la regle " + item)
+        logging.info(str(bilan_regles[item]) + " fois la regle " + item)
     output.close()
 
 
@@ -905,6 +908,7 @@ def print_usage():
 
 if __name__ == "__main__":
     # Load parameters
+    # TODO clean up argument handling
     args = {}
     arg_index = 1
     input_filename = ""
@@ -925,6 +929,8 @@ if __name__ == "__main__":
     if "visible" not in args:
         args["visible"] = 1
     visible = int(args["visible"])
+    if visible == 1:
+        logging.getLogger().setLevel(logging.INFO)
 
     # tag=treetagger par défaut
     if "tag" not in args:
