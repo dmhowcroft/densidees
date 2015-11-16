@@ -27,55 +27,53 @@
 #######################################################################
 
 
-import os, re
-from math import *
+import os
+import re
 from sys import argv
 
-# ------------------------------
+# Variables
+AUXILIARIES = {"être", "suivre|être", "avoir"}
+
+
 # Function Definitions
-# ------------------------------
 def open_text(text_filename, tagger):
-    """Loads a text file into a two-element table"""
+    """Loads PoS-tagged input file into a list of words.
 
-    # Open a text file and put into a 2-element table:
-    # -> a table containing the sequence of all words in the text
-    # -> a dict containing all distinct words of the text with associated nb of occurrences
-    # * filename: string
-    # * sepchar: string, used to separate cooccurrence windows, will not be added to wordlist
-
+    :type text_filename: basestring the name of the file to be processed
+    :type tagger: basestring the tagger used
+    """
     text_file = open(text_filename, "r")
     text = []
 
-    # ------------------------------
-    # go through the text to extract the words, store them in dict "wordlist" with frequencies
-    # and in table "text" in the order they appear
-    # ------------------------------
-    for i, line in enumerate(text_file):
+    # go through the text to extract the words, store them in table "text" in the order they appear
+    for line_number, line in enumerate(text_file):
         if tagger == "treetagger":
-            res = re.search("^([^	]+)	([^	]+)	([^	\n]+)[\n]*", line)
-            if res:
-                item = {"word": res.group(1).lower(), "tag": res.group(2), "lemma": res.group(3), "rule": "000",
-                        "is_word": " ", "is_prop": " "}
-                # print(item)
+            word_tag_lemma_re = re.search("^([^	]+)	([^	]+)	([^	\n]+)[\n]*", line)
+            if word_tag_lemma_re:
+                item = {"word": word_tag_lemma_re.group(1).lower(),
+                        "tag": word_tag_lemma_re.group(2),
+                        "lemma": word_tag_lemma_re.group(3),
+                        "rule": "000",
+                        "is_word": " ",
+                        "is_prop": " "}
                 text.append(item)
             else:
-                print("Ligne", i, "non traitée :", line)
+                print("Ligne", line_number, "non traitée :", line)
                 item = {"word": " ", "tag": "INT", "lemma": " ", "rule": "000", "is_word": " ", "is_prop": " "}
-                # print(item)
                 text.append(item)
         else:
-            res = re.search(
-                "^([0-9]+)	([0-9]+)	([0-9]+)		([^	]+)	([^	]+)	([^	]*)	([0-9]+)	([^	]+)	([^	]+).*",
-                line)
-            # print(line)
-            # res=re.search("^([0-9]+)	([0-9]+)	([0-9]+)		([^	]+)	([^	]+)	([^	]*)	([0-9]+)	([^	]+)	([^	]+).*[\n]*",line)
-            if res:
-                item = {"word": res.group(4).lower(), "lemma": res.group(5), "tag": res.group(9), "rule": "000",
-                        "is_word": " ", "is_prop": " "}
-                # print(item)
+            alt_format = "^([0-9]+)	([0-9]+)	([0-9]+)		([^	]+)	([^	]+)	([^	]*)	([0-9]+)	([^	]+)	([^	]+).*"
+            alt_format_re = re.search(alt_format, line)
+            if alt_format_re:
+                item = {"word": alt_format_re.group(4).lower(),
+                        "lemma": alt_format_re.group(5),
+                        "tag": alt_format_re.group(9),
+                        "rule": "000",
+                        "is_word": " ",
+                        "is_prop": " "}
                 text.append(item)
             else:
-                print("Ligne", i, "non traitée :", line)
+                print("Ligne", line_number, "non traitée :", line)
     text_file.close()
     return text
 
@@ -106,33 +104,37 @@ def is_link(lemma):
 
 
 def process_treetagged_file(treetagged_filename, ovt_flags):
-    # TODO finish refactoring to remove shadowing variables from outer scope
-    oral, visible, tagger = ovt_flags
-    if visible == 1:
+    is_oral, debug_mode, tagger = ovt_flags
+    # TODO replace "visible" / "debug_mode" with logging/debug statements
+    if debug_mode == 1:
         print("Chargement du fichier texte...")
-    output = open(treetagged_filename + ".di.txt", "w")  # Open the text
+
+    # Open a file for output. Extend the original filename with ".di.txt"
+    output = open(treetagged_filename + ".di.txt", "w")
     text = open_text(treetagged_filename, tagger)
-    i = 0
+
     mode = "normal"
 
-    # Prétraitement auxiliaire si TreeTagger ne le fait pas
-    while i < len(text):
-        if (tagger == "treetagger" and ((text[i - 1]["lemma"] == "être") or (text[i - 1]["lemma"] == "suivre|être") or (
-                    text[i - 1]["lemma"] == "avoir")) and (text[i]["tag"] == "VER:pper")):
-            text[i - 1]["tag"] = "VER:aux"
-        if (tagger == "treetagger" and ((text[i - 2]["lemma"] == "être") or (text[i - 2]["lemma"] == "suivre|être") or (
-                    text[i - 2]["lemma"] == "avoir")) and text[i - 1]["tag"] == "ADV" and text[i]["tag"] == "VER:pper"):
-            text[i - 2]["tag"] = "VER:aux"
-        # if (tagger=="treetagger" and ((text[i-3]["lemma"]=="être") or (text[i-2]["lemma"]=="suivre|être") or (text[i-2]["lemma"]=="avoir")) and text[i]["tag"]=="VER:pper"):
-        #        text[i-3]["tag"]="VER:aux"
-        if (tagger == "treetagger" and text[i]["lemma"] == "oui"):
-            text[i]["tag"] = "ADV"
-        i += 1
+    # Auxiliary pretreatment if not done by TreeTagger
+    if tagger == "treetagger":
+        for i in range(0, len(text)):
+            if text[i - 1]["lemma"] in AUXILIARIES and text[i]["tag"] == "VER:pper":
+                text[i - 1]["tag"] = "VER:aux"
+            if text[i - 2]["lemma"] in AUXILIARIES and text[i - 1]["tag"] == "ADV" and text[i]["tag"] == "VER:pper":
+                text[i - 2]["tag"] = "VER:aux"
+            # DMH: This was commented out in the original densidees.
+            # if ((text[i - 3]["lemma"] == "être")
+            #     or (text[i - 2]["lemma"] == "suivre|être")
+            #     or (text[i - 2]["lemma"] == "avoir")) \
+            #         and text[i]["tag"] == "VER:pper":
+            #     text[i - 3]["tag"] = "VER:aux"
+            if text[i]["lemma"] == "oui":
+                text[i]["tag"] = "ADV"
 
     i = 0
     # Application des règles
     while i < len(text):
-        # print(text[i]["word"])
+        # Mode Switches (to skip counting of words or props when undesired)
         if text[i]["word"] == "(":
             mode = "noprop"
         if text[i]["word"] == ")":
@@ -144,7 +146,7 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
 
         # 001 Interjections (mode oral)
         # Interjections non reconnues par TreeTagger => pas mot, pas proposition
-        if oral == 1 and tagger == "treetagger" and (text[i]["word"] == "tiens" or text[i]["word"] == "heu"):
+        if is_oral == 1 and tagger == "treetagger" and (text[i]["word"] == "tiens" or text[i]["word"] == "heu"):
             text[i]["tag"] = "INT"
             text[i]["rule"] = "001"
         if tagger == "treetagger" and text[i]["tag"] == "ADV" and text[i]["word"] == "ben":
@@ -157,10 +159,12 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
         # 002 Ponctuation et symboles (mode oral)
         # Signe de ponctuation, symbole => pas mot
         # if re.search("^[a-zA-Zéèçàùêîôûäëïöü0-9]",text[i]["word"]) and text[i]["tag"]!="SYM":
-        if (tagger == "treetagger" and (
-                                text[i]["tag"] != "SYM" and text[i]["tag"] != "PUN" and text[i]["tag"] != "SENT" and
-                        text[i][
-                            "tag"] != "INT")) or (tagger == "cordial" and (text[i]["tag"][0] != "Y")):
+        if (tagger == "treetagger"
+            and (text[i]["tag"] != "SYM"
+                 and text[i]["tag"] != "PUN"
+                 and text[i]["tag"] != "SENT"
+                 and text[i]["tag"] != "INT")) \
+                or (tagger == "cordial" and (text[i]["tag"][0] != "Y")):
             text[i]["is_word"] = "W"
             text[i]["rule"] = "002"
 
@@ -180,12 +184,9 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
         # (Common situation, for handling fractions, decimals, etc.
         # -> done by TreeTagger
 
-
-
-
         # 020 Répétition ou correction d'un mot (mode oral)
         # A A ou préfixe-de-A A => premier A : pas mot, pas proposition
-        if oral == 1 and text[i]["word"].find(text[i - 1]["word"]) == 0:
+        if is_oral == 1 and text[i]["word"].find(text[i - 1]["word"]) == 0:
             text[i - 1]["is_word"] = " "
             text[i - 1]["is_prop"] = " "
             text[i - 1]["rule"] = "020"
@@ -195,7 +196,7 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
         # 023 Répétition ou correction de 2 mots (mode oral)
         # A B A B ou préfixe-de-A préfixe-de-B A B => premier A et premier B : pas mot, pas proposition
         # CHECK Vérifier que la règle du préfixe est pertinente ou la remplacer par []
-        if oral == 1 and text[i]["word"].find(text[i - 2]["word"]) == 0 \
+        if is_oral == 1 and text[i]["word"].find(text[i - 2]["word"]) == 0 \
                 and text[i - 1]["word"].find(text[i - 3]["word"]) == 0:
             text[i - 3]["is_word"] = " "
             text[i - 3]["is_prop"] = " "
@@ -205,8 +206,9 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
             text[i - 2]["rule"] = "023"
 
         # 024  Répétition ou correction de 3 mots (mode oral)
-        # A B C A B C ou préfixe-de-A préfixe-de-B préfixe-de-C A B C => premier A, premier B et premier C : pas mot, pas proposition
-        if oral == 1 and text[i]["word"].find(text[i - 3]["word"]) == 0 \
+        # A B C A B C ou préfixe-de-A préfixe-de-B préfixe-de-C A B C
+        #   => premier A, premier B et premier C : pas mot, pas proposition
+        if is_oral == 1 and text[i]["word"].find(text[i - 3]["word"]) == 0 \
                 and text[i - 1]["word"].find(text[i - 4]["word"]) == 0 \
                 and text[i - 2]["word"].find(text[i - 5]["word"].lower()) == 0:
             text[i - 5]["is_word"] = " "
@@ -223,7 +225,7 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
 
         # 101 est-ce que ...
         # Ne pas compter comme proposition en mode oral
-        if (oral == 1) and (text[i - 2]["lemma"] == "être") \
+        if (is_oral == 1) and (text[i - 2]["lemma"] == "être") \
                 and (text[i - 1]["lemma"] == "ce") and (text[i]["lemma"] == "que"):
             text[i - 2]["is_prop"] = " "
             text[i - 2]["rule"] = "101"
@@ -296,8 +298,10 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
 
         # 203 Soit soit
         # soit + 1 à 3 mots + soit : seul le premier "soit" est compré comme proposition
-        if (text[i - 2]["word"] == "soit" or text[i - 3]["word"] == "soit" or text[i - 4]["word"] == "soit") and \
-                        text[i]["word"] == "soit":
+        if (text[i - 2]["word"] == "soit"
+            or text[i - 3]["word"] == "soit"
+            or text[i - 4]["word"] == "soit") \
+                and text[i]["word"] == "soit":
             text[i]["is_prop"] = " "
             text[i]["rule"] = "203"
 
@@ -306,15 +310,19 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
         # adverbes après "et" : "puis", "alors", "donc", "ensuite", "finalement" => "et" pas proposition
         # adverbes après "ou" : "alors" "bien" => "ou" pas proposition
         # CHECK à compléter
-        if (tagger == "treetagger" and ((text[i]["lemma"] == "puis" or text[i]["lemma"] == "alors" or text[i][
-            "lemma"] == "donc" or text[i]["lemma"] == "ensuite" or text[i]["lemma"] == "finalement") and text[i - 1][
-            "lemma"] == "et")):
+        if tagger == "treetagger" \
+                and ((text[i]["lemma"] == "puis"
+                      or text[i]["lemma"] == "alors"
+                      or text[i]["lemma"] == "donc"
+                      or text[i]["lemma"] == "ensuite"
+                      or text[i]["lemma"] == "finalement")
+                     and text[i - 1]["lemma"] == "et"):
             text[i - 1]["is_prop"] = " "
             text[i]["is_prop"] = "P"
             text[i - 1]["rule"] = "204"
             text[i]["rule"] = "204"
-        if (tagger == "treetagger" and (
-                    (text[i]["lemma"] == "bien" or text[i]["lemma"] == "alors") and text[i - 1]["lemma"] == "ou")):
+        if tagger == "treetagger" \
+                and ((text[i]["lemma"] == "bien" or text[i]["lemma"] == "alors") and text[i - 1]["lemma"] == "ou"):
             text[i - 1]["is_prop"] = " "
             text[i]["is_prop"] = "P"
             text[i - 1]["rule"] = "204"
@@ -325,27 +333,34 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
         # pas compter "à" et "de" comme une proposition
         # CHECK étiquetage treetagger des verbes intransitifs ? Non
 
-
         # 206 "de" non proposition
         # "de" n'est pas proposition après "falloir", "agir", "arriver", "paraître"
-        if text[i]["lemma"] == "de" and (
-                                text[i - 1]["lemma"] == "agir" or text[i - 1]["lemma"] == "arriver" or text[i - 1][
-                        "lemma"] == "falloir" or text[i - 1]["lemma"] == "paraître"):
+        if text[i]["lemma"] == "de" \
+                and (text[i - 1]["lemma"] == "agir"
+                     or text[i - 1]["lemma"] == "arriver"
+                     or text[i - 1]["lemma"] == "falloir"
+                     or text[i - 1]["lemma"] == "paraître"):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "206"
-        if text[i]["lemma"] == "de" and (text[i - 1]["word"] == "envie" or text[i - 1]["word"] == "lieu" or text[i - 1][
-            "word"] == "pitié" or text[i - 1]["word"] == "soin") and (
-                        text[i - 2]["lemma"] == "avoir" or text[i - 3]["lemma"] == "avoir"):
+        if text[i]["lemma"] == "de" \
+                and (text[i - 1]["word"] == "envie"
+                     or text[i - 1]["word"] == "lieu"
+                     or text[i - 1]["word"] == "pitié"
+                     or text[i - 1]["word"] == "soin") \
+                and (text[i - 2]["lemma"] == "avoir" or text[i - 3]["lemma"] == "avoir"):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "206"
-        if text[i]["lemma"] == "de" and (
-                            text[i - 1]["lemma"] == "près" or text[i - 1]["lemma"] == "auprès" or text[i - 1][
-                    "lemma"] == "lors"):
+        if text[i]["lemma"] == "de" \
+                and (text[i - 1]["lemma"] == "près"
+                     or text[i - 1]["lemma"] == "auprès"
+                     or text[i - 1]["lemma"] == "lors"):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "206"
-        if text[i]["lemma"] == "de" and (
-                                text[i - 1]["lemma"] == "beaucoup" or text[i - 1]["lemma"] == "plein" or text[i - 1][
-                        "lemma"] == "énormément" or text[i - 1]["lemma"] == "tellement"):
+        if text[i]["lemma"] == "de" \
+                and (text[i - 1]["lemma"] == "beaucoup"
+                     or text[i - 1]["lemma"] == "plein"
+                     or text[i - 1]["lemma"] == "énormément"
+                     or text[i - 1]["lemma"] == "tellement"):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "206"
         if text[i - 2]["word"] == "à" and (text[i - 1]["word"] == "côté" and text[i]["lemma"] == "de"):
@@ -355,30 +370,48 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "206"
 
-
-            # 207 "que" non proposition
+        # 207 "que" non proposition
         # "que" n'est pas proposition après "falloir", "sembler", "arriver", "paraître"
-        if text[i]["lemma"] == "que" and (
-                                text[i - 1]["lemma"] == "falloir" or text[i - 1]["lemma"] == "sembler" or text[i - 1][
-                        "lemma"] == "arriver" or text[i - 1]["lemma"] == "paraître"):
+        if text[i]["lemma"] == "que" \
+                and (text[i - 1]["lemma"] == "falloir"
+                     or text[i - 1]["lemma"] == "sembler"
+                     or text[i - 1]["lemma"] == "arriver"
+                     or text[i - 1]["lemma"] == "paraître"):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "207"
-        if oral == 1 and (text[i - 2]["word"] == "est" and text[i - 1]["word"] == "vrai" and text[i]["lemma"] == "que"):
+        if is_oral == 1 \
+                and (text[i - 2]["word"] == "est"
+                     and text[i - 1]["word"] == "vrai"
+                     and text[i]["lemma"] == "que"):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "207"
 
         # 208 Comparatif
         # "que" n'est pas proposition après "autant", "moins", "pire", "plus"
-        # if text[i]["lemma"]=="que" and (text[i-1]["lemma"]=="autant" or text[i-1]["lemma"]=="plus" or text[i-1]["lemma"]=="moins") and (text[i-2]["lemma"]=="autant" or text[i-2]["lemma"]=="plus" or text[i-2]["lemma"]=="moins")  and (text[i-3]["lemma"]=="autant" or text[i-3]["lemma"]=="plus" or text[i-3]["lemma"]=="moins"):
-        if text[i]["lemma"] == "que" and (
-                            (text[i - 1]["lemma"] == "autant" or text[i - 2]["lemma"] == "autant" or text[i - 3][
-                                "lemma"] == "autant") or
-                            (text[i - 1]["lemma"] == "moins" or text[i - 2]["lemma"] == "moins" or text[i - 3][
-                                "lemma"] == "moins") or
-                        (text[i - 1]["lemma"] == "plus" or text[i - 2]["lemma"] == "plus" or text[i - 3][
-                            "lemma"] == "plus") or
-                    (text[i - 2]["lemma"] == "aussi" or text[i - 3]["lemma"] == "aussi")
-        ):
+        # DMH: This was commented out in the original densidees.
+        # if text[i]["lemma"]=="que"
+        #     and (text[i-1]["lemma"]=="autant"
+        #          or text[i-1]["lemma"]=="plus"
+        #          or text[i-1]["lemma"]=="moins")
+        #     and (text[i-2]["lemma"]=="autant"
+        #          or text[i-2]["lemma"]=="plus"
+        #          or text[i-2]["lemma"]=="moins")
+        #     and (text[i-3]["lemma"]=="autant"
+        #          or text[i-3]["lemma"]=="plus"
+        #          or text[i-3]["lemma"]=="moins"):
+        if text[i]["lemma"] == "que" \
+                and ((text[i - 1]["lemma"] == "autant"
+                      or text[i - 2]["lemma"] == "autant"
+                      or text[i - 3]["lemma"] == "autant")
+                     or (text[i - 1]["lemma"] == "moins"
+                         or text[i - 2]["lemma"] == "moins"
+                         or text[i - 3]["lemma"] == "moins")
+                     or (text[i - 1]["lemma"] == "plus"
+                         or text[i - 2]["lemma"] == "plus"
+                         or text[i - 3]["lemma"] == "plus")
+                     or
+                         (text[i - 2]["lemma"] == "aussi"
+                          or text[i - 3]["lemma"] == "aussi")):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "207"
         if text[i]["lemma"] == "que" and (text[i - 1]["lemma"] == "pire" or text[i - 1]["lemma"] == "mieux"):
@@ -387,47 +420,61 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
 
         # 210 Oui et non (mode oral)
         # oui et non : pas proposition
-        if oral == 1 and (text[i]["word"] == "oui" or text[i]["word"] == "non"):
+        if is_oral == 1 and (text[i]["word"] == "oui" or text[i]["word"] == "non"):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "210"
 
         # 211 Négation
-        # "aucun" "guère" "jamais" "nul" "pas" "plus" "point" "que" "rien" précédé (à distance 1, 2 ou 3) par "ne" : seul "ne" proposition
-        if (tagger == "treetagger" and ((text[i]["lemma"] == "aucun" or text[i]["word"] == "guère" or text[i][
-            "word"] == "jamais" or text[i]["lemma"] == "nul" or text[i]["word"] == "pas" or text[i]["word"] == "plus" or
-                                                 text[i]["word"] == "point" or text[i]["lemma"] == "que" or text[i][
-            "word"] == "rien") and (
-                            text[i - 1]["lemma"] == "ne" or text[i - 2]["lemma"] == "ne" or text[i - 3][
-                    "lemma"] == "ne"))):
+        # "aucun" "guère" "jamais" "nul" "pas" "plus" "point" "que" "rien" précédé (à distance 1, 2 ou 3) par "ne" :
+        #   seul "ne" proposition
+        if tagger == "treetagger" \
+                and ((text[i]["lemma"] == "aucun"
+                      or text[i]["word"] == "guère"
+                      or text[i]["word"] == "jamais"
+                      or text[i]["lemma"] == "nul"
+                      or text[i]["word"] == "pas"
+                      or text[i]["word"] == "plus"
+                      or text[i]["word"] == "point"
+                      or text[i]["lemma"] == "que"
+                      or text[i]["word"] == "rien")
+                     and (text[i - 1]["lemma"] == "ne"
+                          or text[i - 2]["lemma"] == "ne"
+                          or text[i - 3]["lemma"] == "ne")):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "211"
 
         # 212 Négation suivie de "de"
         # "de" n'est pas une proposition si précédée par négation
         # CHECK pas du tout
-        if (tagger == "treetagger" and (text[i]["lemma"] == "de" and (
-                                        text[i - 1]["word"] == "pas" or text[i - 1]["word"] == "plus" or text[i - 1][
-                                "word"] == "guère" or text[i - 1]["word"] == "point" or text[i - 1][
-                        "word"] == "jamais" or
-                        text[i - 1]["word"] == "rien"))):
+        if tagger == "treetagger" \
+                and (text[i]["lemma"] == "de"
+                     and (text[i - 1]["word"] == "pas"
+                          or text[i - 1]["word"] == "plus"
+                          or text[i - 1]["word"] == "guère"
+                          or text[i - 1]["word"] == "point"
+                          or text[i - 1]["word"] == "jamais"
+                          or text[i - 1]["word"] == "rien")):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "212"
 
         # 213 Futur proche
         # lemme="aller" + infinitif = futur proche : aller n'est pas une proposition
-        if (tagger == "treetagger" and (text[i - 1]["lemma"] == "aller" and text[i]["tag"] == "VER:infi")):
+        if tagger == "treetagger" and (text[i - 1]["lemma"] == "aller" and text[i]["tag"] == "VER:infi"):
             text[i - 1]["is_prop"] = " "
             text[i - 1]["rule"] = "213"
 
         # 214 Si ... alors
         # "si" + 1 à 9 mots + "alors" : ne pas compter "alors" comme proposition, seulement "si".
-        if (text[i]["lemma"] == "alors" and (
-                                                    text[i - 1]["lemma"] == "si" or text[i - 2]["lemma"] == "si" or
-                                                text[i - 3][
-                                                    "lemma"] == "si" or text[i - 4]["lemma"] == "si" or text[i - 5][
-                                    "lemma"] == "si" or
-                                    text[i - 6]["lemma"] == "si" or text[i - 7]["lemma"] == "si" or text[i - 8][
-                        "lemma"] == "si" or text[i - 9]["lemma"] == "si")):
+        if text[i]["lemma"] == "alors" \
+                and (text[i - 1]["lemma"] == "si"
+                     or text[i - 2]["lemma"] == "si"
+                     or text[i - 3]["lemma"] == "si"
+                     or text[i - 4]["lemma"] == "si"
+                     or text[i - 5]["lemma"] == "si"
+                     or text[i - 6]["lemma"] == "si"
+                     or text[i - 7]["lemma"] == "si"
+                     or text[i - 8]["lemma"] == "si"
+                     or text[i - 9]["lemma"] == "si"):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "214"
 
@@ -439,10 +486,14 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
                             (text[i]["tag"][0] == "A" or text[i]["tag"][0] == "R") and is_link(text[i - 1]["lemma"]))):
             text[i - 1]["is_prop"] = " "
             text[i - 1]["rule"] = "301"
-        # if (tagger=="treetagger" and ((text[i]["tag"]=="ADJ") and is_link(text[i-2]["lemma"]))) or (tagger=="cordial" and ((text[i]["tag"][0]=="A" or text[i]["tag"][0]=="R") and is_link(text[i-2]["lemma"]))):
-        #        text[i-2]["is_prop"]=" "
-        #        text[i-2]["rule"]="301"
-        if (text[i - 2]["lemma"] == "avoir" and text[i]["lemma"] == "le" and text[i]["lemma"] == "air"):
+
+        if (tagger == "treetagger" and (text[i]["tag"]=="ADJ" and is_link(text[i-2]["lemma"]))) \
+                or (tagger == "cordial"
+                    and ((text[i]["tag"][0] == "A" or text[i]["tag"][0] == "R") and is_link(text[i-2]["lemma"]))):
+               text[i-2]["is_prop"]=" "
+               text[i-2]["rule"]="301"
+
+        if text[i - 2]["lemma"] == "avoir" and text[i]["lemma"] == "le" and text[i]["lemma"] == "air":
             text[i]["is_prop"] = " "
             text[i - 1]["is_prop"] = " "
             text[i - 2]["is_prop"] = " "
@@ -452,31 +503,30 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
 
         # 302 Verbe être suivi d'une préposition
         # "être" non proposition si suivi d'une préposition
-        if (tagger == "treetagger" and (
-                        text[i]["tag"] == "PRP" and (
-                        text[i - 1]["lemma"] == "être" or text[i - 1]["lemma"] == "suivre|être"))):
+        if tagger == "treetagger" and (text[i]["tag"] == "PRP"
+                                       and (text[i - 1]["lemma"] == "être" or text[i - 1]["lemma"] == "suivre|être")):
             text[i - 1]["is_prop"] = " "
             text[i - 1]["rule"] = "302"
-        if (tagger == "treetagger" and (text[i]["tag"] == "PRP" and (text[i - 1]["tag"] == "ADV") and (
-                        text[i - 2]["lemma"] == "être" or text[i - 2]["lemma"] == "suivre|être"))):
+        if tagger == "treetagger" and (text[i]["tag"] == "PRP" and (text[i - 1]["tag"] == "ADV")
+                                       and (text[i - 2]["lemma"] == "être" or text[i - 2]["lemma"] == "suivre|être")):
             text[i - 2]["is_prop"] = " "
             text[i - 2]["rule"] = "302"
 
         # 402 Auxiliaire
         # AUX + VERBE => une seule proposition
-        if (tagger == "treetagger" and (
-                    re.search("^VER.*", text[i]["tag"]) and re.search("^VER:aux.*", text[i - 1]["tag"]))):
+        if tagger == "treetagger" \
+                and (re.search("^VER.*", text[i]["tag"]) and re.search("^VER:aux.*", text[i - 1]["tag"])):
             text[i - 1]["is_prop"] = " "
             text[i - 1]["rule"] = "402"
-        if (tagger == "cordial" and text[i]["tag"][0] == "V" and text[i]["tag"][1] == "a"):
+        if tagger == "cordial" and text[i]["tag"][0] == "V" and text[i]["tag"][1] == "a":
             text[i]["is_prop"] = " "
             text[i]["rule"] = "402"
 
         # 405 Auxiliaire avec mot interposé
         # AUX + mot + VERBE => une seule proposition
         # check : AUX + 2 mots + verbe
-        if (tagger == "treetagger" and (
-                    re.search("^VER.*", text[i]["tag"]) and re.search("^VER:aux.*", text[i - 2]["tag"]))):
+        if tagger == "treetagger" \
+                and (re.search("^VER.*", text[i]["tag"]) and re.search("^VER:aux.*", text[i - 2]["tag"])):
             text[i - 2]["is_prop"] = " "
             text[i - 2]["rule"] = "405"
 
@@ -501,26 +551,40 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
         # 512 Verbes suivis d'une préposition naturelle
         # "à" non prop si précédé de aller, voyager ... CHECK corpus
         # "de" non prop si précédé de venir
-        if (tagger == "treetagger" and (
-                                    text[i - 1]["lemma"] == "aller" or text[i - 1]["lemma"] == "sortir" or text[i - 1][
-                            "lemma"] == "rentrer" or text[i - 1]["lemma"] == "entrer" or text[i - 1][
-                    "lemma"] == "rendre") and (
-                        text[i]["word"] == "à" or text[i]["word"] == "au")):
+        if tagger == "treetagger" \
+                and (text[i - 1]["lemma"] == "aller"
+                     or text[i - 1]["lemma"] == "sortir"
+                     or text[i - 1]["lemma"] == "rentrer"
+                     or text[i - 1]["lemma"] == "entrer"
+                     or text[i - 1]["lemma"] == "rendre") \
+                and (text[i]["word"] == "à" or text[i]["word"] == "au"):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "512"
-        if (tagger == "treetagger" and (text[i - 1]["lemma"] == "arriver" or text[i - 1]["lemma"] == "entrer" or
-                                                text[i - 1]["lemma"] == "rentrer" or text[i - 1][
-            "lemma"] == "revenir" or text[i - 1]["lemma"] == "venir" or text[i - 1]["lemma"] == "occuper" or
-                                                text[i - 1]["lemma"] == "essayer") and text[i]["lemma"] == "de"):
+        if tagger == "treetagger" \
+                and (text[i - 1]["lemma"] == "arriver"
+                     or text[i - 1]["lemma"] == "entrer"
+                     or text[i - 1]["lemma"] == "rentrer" 
+                     or text[i - 1]["lemma"] == "revenir" 
+                     or text[i - 1]["lemma"] == "venir" 
+                     or text[i - 1]["lemma"] == "occuper" 
+                     or text[i - 1]["lemma"] == "essayer") \
+                and text[i]["lemma"] == "de":
             text[i]["is_prop"] = " "
             text[i]["rule"] = "512"
 
         # 600 Marqueurs discursifs
         # expressions qui ne sont pas proposition
         # je crois bien
-        # comment te dirais-je ?/ comment je vous dirais-je ?,  je dirais, direais-je, comment je pourrais dire, comme on dit, comme qui dirait, dit-on, je te dis/ je vous dis, si on peut dire/ si je puis dire, tu m?en diras tant, dis-moi donc, tu me dis pas/ vous me dites pas/ dis-moi pas/ dites-moi pas, je dis pas, c?est ben pour dire, cela va sans dire, c?est le cas de le dire, à qui le dis-tu/ à qui le dites-vous, c?est tout dire, c?est le cas de le dire, à qui le dis-tu/ à qui le dites-vous, c?est tout dire, ce n?est pas peu dire, c?est moi qui te le dis, c?est moi qui vous le dis, il n?y a pas à dire
-        # Entendre : entendons-nous, s?entend, tu entend/ vous m?entendez, entends-tu/ m?entendez-vous, ce qu?il faut pas entendre/ qu?est-ce qu?il faut pas entendre
-        # Falloir : il s?en faut, tant s?en faut
+        # comment te dirais-je ?/ comment je vous dirais-je ?, 
+        #   je dirais, direais-je, comment je pourrais dire, comme on dit, comme qui dirait, dit-on, 
+        #   je te dis/ je vous dis, si on peut dire/ si je puis dire, tu m?en diras tant, dis-moi donc, 
+        #   tu me dis pas/ vous me dites pas/ dis-moi pas/ dites-moi pas, je dis pas, c'est ben pour dire, 
+        #   cela va sans dire, c'est le cas de le dire, à qui le dis-tu/ à qui le dites-vous, c'est tout dire, 
+        #   c'est le cas de le dire, à qui le dis-tu/ à qui le dites-vous, c'est tout dire, ce n?est pas peu dire, 
+        #   c'est moi qui te le dis, c'est moi qui vous le dis, il n?y a pas à dire
+        # Entendre : entendons-nous, s'entend, tu entend/ vous m'entendez, entends-tu/ m?entendez-vous,
+        #   ce qu'il faut pas entendre/ qu?est-ce qu?il faut pas entendre
+        # Falloir : il s'en faut, tant s'en faut
         # Faire : fais-toi-z-en pas/ faites-vous-z-en pas
         # Inquiéter : inquiète-toi pas/ inquiétez-vous pas
         #  mets-en/ mettez-en
@@ -531,28 +595,40 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
         # CHECK
 
         # or text[i]["word"]=="va" or text[i]["word"]=="dis"
-        if oral == 1 and (text[i]["word"] == "admettons" or text[i]["word"] == "allez" or text[i]["word"] == "allons" or
-                                  text[i]["word"] == "attends" or text[i]["word"] == "attendez" or text[i][
-            "word"] == "comprenez" or text[i]["word"] == "disons" or text[i]["word"] == "écoute" or text[i][
-            "word"] == "écoutez" or text[i]["word"] == "mettons" or text[i]["word"] == "mettez" or text[i][
-            "word"] == "regarde" or text[i]["word"] == "regardez" or text[i]["word"] == "voyons" or text[i][
-            "word"] == "enfin" or text[i]["word"] == "voilà"):
+        if is_oral == 1 \
+                and (text[i]["word"] == "admettons"
+                     or text[i]["word"] == "allez"
+                     or text[i]["word"] == "allons"
+                     or text[i]["word"] == "attends"
+                     or text[i]["word"] == "attendez"
+                     or text[i]["word"] == "comprenez"
+                     or text[i]["word"] == "disons"
+                     or text[i]["word"] == "écoute"
+                     or text[i]["word"] == "écoutez"
+                     or text[i]["word"] == "mettons"
+                     or text[i]["word"] == "mettez"
+                     or text[i]["word"] == "regarde"
+                     or text[i]["word"] == "regardez"
+                     or text[i]["word"] == "voyons"
+                     or text[i]["word"] == "enfin"
+                     or text[i]["word"] == "voilà"):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "600"
-        if oral == 1 and ((text[i - 1]["word"] == "va" and text[i]["word"] == "donc") or (
-                        text[i - 1]["word"] == "ça" and text[i]["word"] == "va") or (
-                        text[i - 1]["word"] == "attends" and text[i]["word"] == "voir") or (
-                        text[i - 1]["word"] == "attendez" and text[i]["word"] == "voir") or (
-                        text[i - 1]["word"] == "tu" and text[i]["word"] == "comprends") or (
-                        text[i - 1]["word"] == "vous" and text[i]["word"] == "comprenez") or (
-                        text[i - 1]["word"] == "comprends" and text[i]["word"] == "tu") or (
-                        text[i - 1]["word"] == "comprenez" and text[i]["word"] == "vous") or (
-                        text[i - 1]["word"] == "dis" and text[i]["word"] == "donc") or (
-                        text[i - 1]["word"] == "tu" and text[i]["word"] == "vois") or (
-                        text[i - 1]["word"] == "vous" and text[i]["word"] == "voyez") or (
-                        text[i - 1]["word"] == "figure" and text[i]["word"] == "toi") or (
-                        text[i - 1]["word"] == "figurez" and text[i]["word"] == "vous") or (
-                        text[i - 1]["word"] == "je" and text[i]["word"] == "imagine")):
+        if is_oral == 1 \
+                and ((text[i - 1]["word"] == "va" and text[i]["word"] == "donc")
+                     or (text[i - 1]["word"] == "ça" and text[i]["word"] == "va")
+                     or (text[i - 1]["word"] == "attends" and text[i]["word"] == "voir")
+                     or (text[i - 1]["word"] == "attendez" and text[i]["word"] == "voir")
+                     or (text[i - 1]["word"] == "tu" and text[i]["word"] == "comprends")
+                     or (text[i - 1]["word"] == "vous" and text[i]["word"] == "comprenez")
+                     or (text[i - 1]["word"] == "comprends" and text[i]["word"] == "tu")
+                     or (text[i - 1]["word"] == "comprenez" and text[i]["word"] == "vous")
+                     or (text[i - 1]["word"] == "dis" and text[i]["word"] == "donc")
+                     or (text[i - 1]["word"] == "tu" and text[i]["word"] == "vois")
+                     or (text[i - 1]["word"] == "vous" and text[i]["word"] == "voyez")
+                     or (text[i - 1]["word"] == "figure" and text[i]["word"] == "toi")
+                     or (text[i - 1]["word"] == "figurez" and text[i]["word"] == "vous")
+                     or (text[i - 1]["word"] == "je" and text[i]["word"] == "imagine")):
             text[i - 1]["is_prop"] = " "
             text[i - 1]["rule"] = "600"
             text[i]["is_prop"] = " "
@@ -560,17 +636,22 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
 
         # 601 bien comme marqueur discursif
         # "bien" n'est alors pas proposition
-        if oral == 1 and text[i]["word"] == "bien" and (
-                                text[i - 1]["lemma"] == "penser" or text[i - 1]["lemma"] == "regarder" or text[i - 1][
-                        "lemma"] == "écouter" or text[i - 1]["lemma"] == "voir"):
+        if is_oral == 1 \
+                and text[i]["word"] == "bien" \
+                and (text[i - 1]["lemma"] == "penser"
+                     or text[i - 1]["lemma"] == "regarder"
+                     or text[i - 1]["lemma"] == "écouter"
+                     or text[i - 1]["lemma"] == "voir"):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "601"
 
         # 602 donc comme marqueur discursif
         # "donc" n'est alors pas proposition
-        if oral == 1 and text[i]["word"] == "donc" and (
-                            text[i - 1]["lemma"] == "dire" or text[i - 1]["lemma"] == "comprendre" or text[i - 1][
-                    "lemma"] == "aller"):
+        if is_oral == 1 \
+                and text[i]["word"] == "donc" \
+                and (text[i - 1]["lemma"] == "dire"
+                     or text[i - 1]["lemma"] == "comprendre"
+                     or text[i - 1]["lemma"] == "aller"):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "602"
 
@@ -642,8 +723,10 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
             text[i - 2]["rule"] = "701"
             text[i]["is_prop"] = " "
             text[i]["rule"] = "701"
-        if text[i - 3]["lemma"] == "tout" and text[i - 2]["lemma"] == "de" and text[i - 1]["word"] == "un" and text[i][
-            "word"] == "coup":
+        if text[i - 3]["lemma"] == "tout" \
+                and text[i - 2]["lemma"] == "de" \
+                and text[i - 1]["word"] == "un" \
+                and text[i]["word"] == "coup":
             text[i - 3]["is_prop"] = " "
             text[i - 3]["rule"] = "701"
             text[i - 2]["is_prop"] = " "
@@ -657,12 +740,16 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
             text[i - 2]["rule"] = "701"
             text[i - 1]["is_prop"] = " "
             text[i - 1]["rule"] = "701"
-        if (text[i - 1]["word"] == "alors" or text[i - 1]["word"] == "bien" or text[i - 1]["word"] == "dès" or
-                    text[i - 1]["word"] == "pendant") and (text[i]["lemma"] == "que"):
+        if (text[i - 1]["word"] == "alors"
+            or text[i - 1]["word"] == "bien"
+            or text[i - 1]["word"] == "dès"
+            or text[i - 1]["word"] == "pendant") \
+                and (text[i]["lemma"] == "que"):
             text[i]["is_prop"] = " "
             text[i]["rule"] = "701"
-        if (((text[i - 2]["word"] == "du" and text[i - 1]["word"] == "fait") or (
-                        text[i - 2]["word"] == "en" and text[i - 1]["word"] == "tant")) and text[i]["lemma"] == "que"):
+        if ((text[i - 2]["word"] == "du" and text[i - 1]["word"] == "fait")
+            or (text[i - 2]["word"] == "en" and text[i - 1]["word"] == "tant")) \
+                and text[i]["lemma"] == "que":
             text[i - 2]["is_prop"] = " "
             text[i - 2]["rule"] = "701"
             text[i - 1]["is_prop"] = " "
@@ -676,8 +763,8 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
             text[i - 1]["rule"] = "701"
             text[i]["is_prop"] = "P"
             text[i]["rule"] = "701"
-        if (text[i - 3]["word"] == "vis" and text[i - 2]["word"] == "à" and text[i - 1]["word"] == "vis" and text[i][
-            "lemma"] == "de"):
+        if text[i - 3]["word"] == "vis" and text[i - 2]["word"] == "à" \
+                and text[i - 1]["word"] == "vis" and text[i]["lemma"] == "de":
             text[i - 3]["is_prop"] = " "
             text[i - 3]["is_word"] = " "
             text[i - 3]["rule"] = "701"
@@ -688,8 +775,8 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
             text[i - 1]["rule"] = "701"
             text[i]["is_prop"] = "P"
             text[i]["rule"] = "701"
-        if (text[i - 3]["word"] == "de" and text[i - 2]["word"] == "temps" and text[i - 1]["word"] == "en" and text[i][
-            "lemma"] == "temps"):
+        if text[i - 3]["word"] == "de" and text[i - 2]["word"] == "temps" \
+                and text[i - 1]["word"] == "en" and text[i]["lemma"] == "temps":
             text[i - 3]["is_prop"] = "P"
             text[i - 3]["rule"] = "701"
             text[i - 2]["is_prop"] = " "
@@ -704,7 +791,7 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
             text[i]["is_prop"] = "P"
             text[i]["rule"] = "701"
 
-            # 702 Mots composés avec "par"
+        # 702 Mots composés avec "par"
         # expressions qui ne correspondent qu'à une seule proposition
         if text[i - 1]["word"] == "par" and (text[i]["word"] == "ailleurs" or text[i]["word"] == "après" or text[i][
             "word"] == "avance" or text[i]["word"] == "bonheur" or text[i]["word"] == "chance" or text[i][
@@ -740,10 +827,10 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
             text[i - 1]["rule"] = "703"
             text[i]["rule"] = "703"
 
-        if oral == 1 and mode == "noprop":
+        if is_oral == 1 and mode == "noprop":
             text[i]["is_prop"] = " "
 
-        if oral == 1 and mode == "noword":
+        if is_oral == 1 and mode == "noword":
             text[i]["is_prop"] = " "
             text[i]["is_word"] = " "
 
@@ -770,7 +857,7 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
 
         output.writelines(
             item["rule"] + " " + tag + " " + item["is_word"] + " " + item["is_prop"] + " " + item["word"] + "\n")
-        if visible == 1:
+        if debug_mode == 1:
             print(item["rule"], tag, item["is_word"], item["is_prop"], item["word"])
         i += 1
 
@@ -779,7 +866,7 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
     output.writelines(str(num_props) + " propositions.\n")
     output.writelines(
         "Densité des idées : " + str(10 * round((num_props + 0.00000001) / (num_words + 0.00000001), 4)) + "\n")
-    if visible == 1:
+    if debug_mode == 1:
         print(num_words, "mots.")
         print(num_props, "propositions.")
         print("Densite des idees :", round(10 * (num_props + 0.00000001) / (num_words + 0.00000001), 4))
@@ -788,7 +875,7 @@ def process_treetagged_file(treetagged_filename, ovt_flags):
     num_regles = sorted(bilan_regles.keys())
     for item in num_regles:
         output.writelines(str(bilan_regles[item]) + " fois la règle " + item + "\n")
-        if visible == 1:
+        if debug_mode == 1:
             print(str(bilan_regles[item]) + " fois la regle " + item)
     output.close()
 
@@ -819,15 +906,15 @@ def print_usage():
 if __name__ == "__main__":
     # Load parameters
     args = {}
-    i = 1
+    arg_index = 1
     input_filename = ""
-    while i < len(argv):
-        res = re.search("(.*)[=](.*)", argv[i])
+    while arg_index < len(argv):
+        res = re.search("(.*)[=](.*)", argv[arg_index])
         if res:
             args[res.group(1)] = res.group(2)
         else:
-            input_filename = argv[i]
-        i += 1
+            input_filename = argv[arg_index]
+        arg_index += 1
 
     # oral=1 si mode oral
     if "oral" not in args:
@@ -842,9 +929,9 @@ if __name__ == "__main__":
     # tag=treetagger par défaut
     if "tag" not in args:
         args["tag"] = "treetagger"
-    tagger = args["tag"]
+    tagger_used = args["tag"]
 
-    flags = (oral, visible, tagger)
+    flags = (oral, visible, tagger_used)
 
     if os.path.isfile(input_filename):
         process_treetagged_file(input_filename, flags)
