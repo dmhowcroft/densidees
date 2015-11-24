@@ -1,6 +1,12 @@
 README for Densidees
 ====================
 
+Densidees hasn't been updated in more than 5 years, so it seems 
+unlikely that it will be ported to Python 3. My goal with this fork
+is to port the project (already done) and do a bit of code cleanup
+to make life easier for anyone wishing to further develop the project
+in the future.
+
 Translation of the French README
 --------------------------------
 
